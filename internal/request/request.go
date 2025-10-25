@@ -3,6 +3,7 @@ package request
 import (
 	"bytes"
 	"errors"
+	"go-http-server/internal/headers"
 	"go-http-server/internal/tokens"
 	"io"
 )
@@ -13,20 +14,22 @@ type RequestLine struct {
 	Method        string
 }
 
-type RequestStatus int
+type RequestState int
 
 const (
-	Initialized RequestStatus = iota
+	Initialized RequestState = iota
+	ParsingHeaders
 	Done
 )
 
 type Request struct {
-	RequestLine   RequestLine
-	RequestStatus RequestStatus
+	RequestLine  RequestLine
+	RequestState RequestState
+	Headers      headers.Headers
 }
 
 func (r *Request) parse(data []byte) (int, error) {
-	switch r.RequestStatus {
+	switch r.RequestState {
 	case Initialized:
 		requestLine, numBytes, err := parseRequestLine(data)
 		if err != nil {
@@ -37,7 +40,18 @@ func (r *Request) parse(data []byte) (int, error) {
 		}
 
 		r.RequestLine = requestLine
-		r.RequestStatus = Done
+		r.RequestState = ParsingHeaders
+
+		return numBytes, nil
+	case ParsingHeaders:
+		numBytes, done, err := r.Headers.Parse(data)
+		if err != nil {
+			return 0, err
+		}
+
+		if done {
+			r.RequestState = Done
+		}
 
 		return numBytes, nil
 	case Done:
@@ -47,16 +61,17 @@ func (r *Request) parse(data []byte) (int, error) {
 	}
 }
 
-const BufferSize = 0
+const BufferSize = 8
 
 func RequestFromReader(reader io.Reader) (*Request, error) {
 	buf := make([]byte, BufferSize)
 	readToIndex := 0
 	req := &Request{
-		RequestStatus: Initialized,
+		RequestState: Initialized,
+		Headers:      headers.NewHeaders(),
 	}
 
-	for req.RequestStatus != Done {
+	for req.RequestState != Done {
 		if readToIndex >= len(buf) {
 			newBuf := make([]byte, len(buf)*2)
 			copy(newBuf, buf)
@@ -66,7 +81,7 @@ func RequestFromReader(reader io.Reader) (*Request, error) {
 		n, err := reader.Read(buf[readToIndex:])
 		if err != nil {
 			if errors.Is(err, io.EOF) {
-				req.RequestStatus = Done
+				req.RequestState = Done
 				break
 			}
 			return nil, err

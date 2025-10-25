@@ -41,7 +41,32 @@ func (h Headers) Parse(data []byte) (n int, done bool, err error) {
 	fieldName := bytes.TrimSpace(data[:colonIndex])
 	fieldValue := bytes.TrimSpace(data[colonIndex+1 : crlfIndex])
 
-	h[string(fieldName)] = string(fieldValue)
+	if !isValidFieldName(fieldName) {
+		return 0, false, errors.New("headers error: invalid character in field name")
+	}
+
+	key := string(bytes.ToLower(fieldName))
+	if value, exists := h[key]; exists {
+		h[key] = value + ", " + string(fieldValue)
+	} else {
+		h[key] = string(fieldValue)
+	}
 
 	return crlfIndex + len(tokens.CRLF), false, nil
+}
+
+func isValidFieldName(fieldName []byte) bool {
+	for _, b := range fieldName {
+		switch {
+		case 'A' <= b && b <= 'Z':
+		case 'a' <= b && b <= 'z':
+		case '0' <= b && b <= '9':
+		case b == '!' || b == '#' || b == '$' || b == '%' || b == '&' ||
+			b == '\'' || b == '*' || b == '+' || b == '-' || b == '.' ||
+			b == '^' || b == '_' || b == '`' || b == '|' || b == '~':
+		default:
+			return false
+		}
+	}
+	return true
 }
