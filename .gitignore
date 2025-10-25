@@ -1,0 +1,61 @@
+# Binaries for programs and plugins
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+*.test
+
+# Go build artifacts
+*.out
+*.a
+
+# Output of `go build` or `go install`
+/bin/
+/build/
+/dist/
+/out/
+/cmd/**/bin/
+/cmd/**/build/
+/cmd/**/dist/
+
+# Go coverage / test files
+*.cover
+*.cov
+coverage.*
+*.prof
+*.pprof
+*.test
+*.tmp
+
+# Logs
+*.log
+
+# IDE/editor files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# Vendor (if not checked in)
+vendor/
+
+# Environment / config files (optional)
+.env
+.env.local
+
+# Go module cache (just in case someone builds locally inside repo)
+go.sum.tmp
+
+# Temporary or generated files
+*.bak
+*.old
+*.orig
+
+# Internal generated data (if you ever output inside internal/)
+internal/**/generated/
+internal/**/tmp/
+
+*.txt
