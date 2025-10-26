@@ -3,9 +3,11 @@ package request
 import (
 	"bytes"
 	"errors"
+	"fmt"
 	"go-http-server/internal/headers"
 	"go-http-server/internal/tokens"
 	"io"
+	"strconv"
 )
 
 type RequestLine struct {
@@ -19,6 +21,7 @@ type RequestState int
 const (
 	Initialized RequestState = iota
 	ParsingHeaders
+	ParsingBody
 	Done
 )
 
@@ -26,6 +29,7 @@ type Request struct {
 	RequestLine  RequestLine
 	RequestState RequestState
 	Headers      headers.Headers
+	Body         []byte
 }
 
 func (r *Request) parse(data []byte) (int, error) {
@@ -50,10 +54,42 @@ func (r *Request) parse(data []byte) (int, error) {
 		}
 
 		if done {
-			r.RequestState = Done
+			r.RequestState = ParsingBody
 		}
 
 		return numBytes, nil
+	case ParsingBody:
+		contentLength := r.Headers.Get("content-length")
+
+		if contentLength == "" || contentLength == "0" {
+			r.RequestState = Done
+			return len(data), nil
+		}
+
+		if len(data) <= 0 {
+			return 0, errors.New("request error: body is shorter than reported length")
+		}
+
+		r.Body = append(r.Body, data...)
+
+		contentLengthVal, err := strconv.Atoi(contentLength)
+
+		if err != nil {
+			return 0, err
+		}
+
+		currentBodyLength := len(r.Body)
+
+		if currentBodyLength > contentLengthVal {
+			return 0, errors.New("request error: body is greater than reported length")
+		}
+
+		if currentBodyLength == contentLengthVal {
+			r.RequestState = Done
+			return len(data), nil
+		}
+
+		return len(data), nil
 	case Done:
 		return 0, errors.New("request error: trying to read data in a done state")
 	default:
@@ -79,17 +115,15 @@ func RequestFromReader(reader io.Reader) (*Request, error) {
 		}
 
 		n, err := reader.Read(buf[readToIndex:])
-		if err != nil {
-			if errors.Is(err, io.EOF) {
-				req.RequestState = Done
-				break
-			}
+		fmt.Println(string(buf))
+		if err != nil && !errors.Is(err, io.EOF) {
 			return nil, err
 		}
 
 		readToIndex += n
 
 		numBytes, err := req.parse(buf[:readToIndex])
+
 		if err != nil {
 			return nil, err
 		}
@@ -98,7 +132,11 @@ func RequestFromReader(reader io.Reader) (*Request, error) {
 		readToIndex -= numBytes
 	}
 
-	return req, nil
+	if req.RequestState == Done {
+		return req, nil
+	}
+
+	return req, errors.New("request error: malformed request")
 }
 
 func parseRequestLine(b []byte) (RequestLine, int, error) {

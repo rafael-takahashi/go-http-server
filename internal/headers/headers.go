@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"errors"
 	"go-http-server/internal/tokens"
+	"strings"
 )
 
 type Headers map[string]string
@@ -13,6 +14,10 @@ func NewHeaders() Headers {
 }
 
 func (h Headers) Parse(data []byte) (n int, done bool, err error) {
+	if len(data) <= 0 {
+		return 0, false, errors.New("headers error: missing end of headers")
+	}
+
 	crlfIndex := -1
 	colonIndex := -1
 
@@ -53,6 +58,10 @@ func (h Headers) Parse(data []byte) (n int, done bool, err error) {
 	}
 
 	return crlfIndex + len(tokens.CRLF), false, nil
+}
+
+func (h Headers) Get(key string) string {
+	return h[strings.ToLower(key)]
 }
 
 func isValidFieldName(fieldName []byte) bool {
