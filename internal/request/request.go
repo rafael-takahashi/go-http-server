@@ -3,7 +3,6 @@ package request
 import (
 	"bytes"
 	"errors"
-	"fmt"
 	"go-http-server/internal/headers"
 	"go-http-server/internal/tokens"
 	"io"
@@ -115,7 +114,6 @@ func RequestFromReader(reader io.Reader) (*Request, error) {
 		}
 
 		n, err := reader.Read(buf[readToIndex:])
-		fmt.Println(string(buf))
 		if err != nil && !errors.Is(err, io.EOF) {
 			return nil, err
 		}
@@ -139,15 +137,12 @@ func RequestFromReader(reader io.Reader) (*Request, error) {
 	return req, errors.New("request error: malformed request")
 }
 
-func parseRequestLine(b []byte) (RequestLine, int, error) {
-	// Line parsing
-	i := bytes.Index(b, []byte(tokens.CRLF))
-	if i == -1 {
+func parseRequestLine(data []byte) (RequestLine, int, error) {
+	crlfIndex := bytes.Index(data, []byte(tokens.CRLF))
+	if crlfIndex == -1 {
 		return RequestLine{}, 0, nil
 	}
-	line := b[:i]
-	//rest := b[i+len(CRLF):]
-	// --------------------------
+	line := data[:crlfIndex]
 
 	parts := bytes.Split(line, []byte{tokens.SP})
 	if len(parts) != 3 {
@@ -168,7 +163,7 @@ func parseRequestLine(b []byte) (RequestLine, int, error) {
 		Method:        string(method),
 		RequestTarget: string(requestTarget),
 		HttpVersion:   string(httpVersion[len(tokens.HTTPVersionPrefix):]),
-	}, len(b), nil
+	}, len(line) + len(tokens.CRLF), nil
 }
 
 func validateMethod(method []byte) error {
