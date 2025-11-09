@@ -16,10 +16,11 @@ type HandlerError struct {
 	Message    string
 }
 
-func (h *HandlerError) Write(w io.Writer) error {
-	s := fmt.Sprintf("%d %s", h.StatusCode, h.Message)
-	_, err := w.Write([]byte(s))
-	return err
+func (hErr *HandlerError) Write(w io.Writer) {
+	response.WriteStatusLine(w, hErr.StatusCode)
+	h := response.GetDefaultHeaders(len(hErr.Message))
+	response.WriteHeaders(w, h)
+	w.Write([]byte(hErr.Message))
 }
 
 type Handler func(w io.Writer, req *request.Request) *HandlerError

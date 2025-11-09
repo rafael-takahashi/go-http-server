@@ -75,7 +75,11 @@ func (r *Request) parse(data []byte) (int, error) {
 		if done {
 			contentLength := r.Headers.Get("content-length")
 			fmt.Printf("[DEBUG] Headers done, Content-Length='%s'\n", contentLength)
-			r.RequestState = ParsingBody
+			if contentLength == "" || contentLength == "0" {
+				r.RequestState = Done
+			} else {
+				r.RequestState = ParsingBody
+			}
 		}
 		return numBytes, nil
 
@@ -117,7 +121,6 @@ func RequestFromReader(reader io.Reader) (*Request, error) {
 		Headers:      headers.NewHeaders(),
 	}
 
-	// TODO: change this to parse until no progress can be made. only them read.
 	for req.RequestState != Done {
 		fmt.Printf("\n[DEBUG] Loop start — state=%v readToIndex=%d\n", req.RequestState, readToIndex)
 
@@ -139,17 +142,27 @@ func RequestFromReader(reader io.Reader) (*Request, error) {
 		readToIndex += n
 		fmt.Printf("[DEBUG] Total buffered: %d bytes\n", readToIndex)
 
-		numBytes, err := req.parse(buf[:readToIndex])
-		fmt.Printf("[DEBUG] parse() consumed %d bytes, state=%v, err=%v\n", numBytes, req.RequestState, err)
+		for {
+			numBytes, err := req.parse(buf[:readToIndex])
+			fmt.Printf("[DEBUG] parse() consumed %d bytes, state=%v, err=%v\n", numBytes, req.RequestState, err)
 
-		if err != nil {
-			fmt.Printf("[DEBUG] parse() returned error: %v\n", err)
-			return nil, err
+			if err != nil {
+				fmt.Printf("[DEBUG] parse() returned error: %v\n", err)
+				return nil, err
+			}
+
+			if numBytes <= 0 {
+				break
+			}
+
+			copy(buf, buf[numBytes:readToIndex])
+			readToIndex -= numBytes
+			fmt.Printf("[DEBUG] After shifting buffer: readToIndex=%d\n", readToIndex)
+
+			if readToIndex <= 0 {
+				break
+			}
 		}
-
-		copy(buf, buf[numBytes:readToIndex])
-		readToIndex -= numBytes
-		fmt.Printf("[DEBUG] After shifting buffer: readToIndex=%d\n", readToIndex)
 	}
 
 	fmt.Println("[DEBUG] Request parsing complete!")
