@@ -14,10 +14,15 @@ const (
 	StatusInternalServerError StatusCode = 500
 )
 
-func WriteStatusLine(
-	w io.Writer,
-	statusCode StatusCode,
-) error {
+type Writer struct {
+	writer io.Writer
+}
+
+func NewWriter(writer io.Writer) *Writer {
+	return &Writer{writer: writer}
+}
+
+func (w *Writer) WriteStatusLine(statusCode StatusCode) error {
 	var response string
 	switch statusCode {
 	case StatusOK:
@@ -29,22 +34,23 @@ func WriteStatusLine(
 	default:
 		response = ""
 	}
-	_, err := w.Write([]byte(response))
+
+	_, err := w.writer.Write([]byte(response))
 	return err
 }
 
-func WriteHeaders(
-	w io.Writer,
-	headers headers.Headers,
-) error {
+func (w *Writer) WriteHeaders(headers headers.Headers) error {
+	b := []byte{}
 	for k, v := range headers {
-		_, err := w.Write([]byte(k + ": " + v + "\r\n"))
-		if err != nil {
-			return err
-		}
+		b = fmt.Appendf(b, "%s: %s\r\n", k, v)
 	}
-	_, err := w.Write([]byte("\r\n"))
+	b = fmt.Append(b, "\r\n")
+	_, err := w.writer.Write(b)
 	return err
+}
+
+func (w *Writer) WriteBody(p []byte) (int, error) {
+	return w.writer.Write(p)
 }
 
 func GetDefaultHeaders(contentLength int) headers.Headers {

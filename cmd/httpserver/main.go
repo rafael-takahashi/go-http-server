@@ -4,33 +4,62 @@ import (
 	"go-http-server/internal/request"
 	"go-http-server/internal/response"
 	"go-http-server/internal/server"
-	"io"
 	"log"
 	"os"
 	"os/signal"
 	"syscall"
 )
 
+var HtmlResponses = map[response.StatusCode]string{
+	response.StatusBadRequest: `<html>
+	<head><title>400 Bad Request</title></head>
+	<body>
+		<h1>Bad Request</h1>
+		<p>Malformed Request.</p>
+	</body>
+</html>`,
+
+	response.StatusInternalServerError: `<html>
+	<head>
+		<title>500 Internal Server Error</title>
+	</head>
+	<body>
+		<h1>Internal Server Error</h1>
+		<p>Something went wrong on our end.</p>
+	</body>
+</html>`,
+
+	response.StatusOK: `<html>
+	<head>
+		<title>200 OK</title>
+	</head>
+	<body>
+		<h1>Success!</h1>
+		<p>All good.</p>
+	</body>
+</html>`,
+}
+
 const port = 8080
 
+func writeHTMLResponse(w *response.Writer, status response.StatusCode) {
+	body := HtmlResponses[status]
+	h := response.GetDefaultHeaders(len(body))
+	w.WriteStatusLine(status)
+	w.WriteHeaders(h)
+	w.WriteBody([]byte(body))
+}
+
 func main() {
-	handler := func(w io.Writer, req *request.Request) *server.HandlerError {
-		if req.RequestLine.RequestTarget == "/yourproblem" {
-			return &server.HandlerError{
-				StatusCode: response.StatusBadRequest,
-				Message:    "Your problem is not my problem\n",
-			}
+	handler := func(w *response.Writer, req *request.Request) {
+		switch req.RequestLine.RequestTarget {
+		case "/yourproblem":
+			writeHTMLResponse(w, response.StatusBadRequest)
+		case "/myproblem":
+			writeHTMLResponse(w, response.StatusInternalServerError)
+		default:
+			writeHTMLResponse(w, response.StatusOK)
 		}
-
-		if req.RequestLine.RequestTarget == "/myproblem" {
-			return &server.HandlerError{
-				StatusCode: response.StatusInternalServerError,
-				Message:    "Woopsie, my bad\n",
-			}
-		}
-
-		w.Write([]byte("All good\n"))
-		return nil
 	}
 
 	server, err := server.Serve(port, handler)

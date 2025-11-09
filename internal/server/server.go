@@ -1,29 +1,15 @@
 package server
 
 import (
-	"bytes"
 	"fmt"
 	"go-http-server/internal/request"
 	"go-http-server/internal/response"
-	"io"
 	"log"
 	"net"
 	"sync/atomic"
 )
 
-type HandlerError struct {
-	StatusCode response.StatusCode
-	Message    string
-}
-
-func (hErr *HandlerError) Write(w io.Writer) {
-	response.WriteStatusLine(w, hErr.StatusCode)
-	h := response.GetDefaultHeaders(len(hErr.Message))
-	response.WriteHeaders(w, h)
-	w.Write([]byte(hErr.Message))
-}
-
-type Handler func(w io.Writer, req *request.Request) *HandlerError
+type Handler func(w *response.Writer, req *request.Request)
 
 type Server struct {
 	listener net.Listener
@@ -53,29 +39,15 @@ func (s *Server) listen() {
 func (s *Server) handle(conn net.Conn) {
 	defer conn.Close()
 
+	w := response.NewWriter(conn)
 	req, err := request.RequestFromReader(conn)
 	if err != nil {
-		hErr := &HandlerError{
-			StatusCode: response.StatusBadRequest,
-			Message:    err.Error(),
-		}
-		hErr.Write(conn)
+		w.WriteStatusLine(response.StatusBadRequest)
+		w.WriteHeaders(response.GetDefaultHeaders(0))
 		return
 	}
 
-	buf := bytes.NewBuffer([]byte{})
-
-	hErr := s.handler(buf, req)
-	if hErr != nil {
-		hErr.Write(conn)
-		return
-	}
-
-	body := buf.Bytes()
-	response.WriteStatusLine(conn, response.StatusOK)
-	h := response.GetDefaultHeaders(len(body))
-	response.WriteHeaders(conn, h)
-	conn.Write(body)
+	s.handler(w, req)
 }
 
 func Serve(port int, handler Handler) (*Server, error) {
