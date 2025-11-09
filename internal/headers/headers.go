@@ -68,12 +68,7 @@ func (h Headers) Parse(data []byte) (n int, done bool, err error) {
 		return 0, false, errors.New("headers error: invalid character in field name")
 	}
 
-	key := string(bytes.ToLower(fieldName))
-	if value, exists := h[key]; exists {
-		h[key] = value + ", " + string(fieldValue)
-	} else {
-		h[key] = string(fieldValue)
-	}
+	h.Set(string(fieldName), string(fieldValue))
 
 	return crlfIndex + len(tokens.CRLF), false, nil
 }
@@ -83,11 +78,21 @@ func (h Headers) Get(key string) string {
 }
 
 func (h Headers) Set(key string, val string) {
-	h[strings.ToLower(key)] = val
+	lowerKey := strings.ToLower(key)
+	if existing, ok := h[lowerKey]; ok && existing != "" {
+		h[lowerKey] = existing + ", " + val
+	} else {
+		h[lowerKey] = val
+	}
 }
 
 func (h Headers) Delete(key string) {
 	delete(h, strings.ToLower(key))
+}
+
+func (h Headers) Replace(key string, val string) {
+	h.Delete(key)
+	h[strings.ToLower(key)] = val
 }
 
 func isValidFieldName(fieldName []byte) bool {

@@ -43,10 +43,15 @@ func (w *Writer) WriteStatusLine(statusCode StatusCode) error {
 
 func (w *Writer) WriteHeaders(headers headers.Headers) error {
 	b := []byte{}
+
 	for k, v := range headers {
 		b = fmt.Appendf(b, "%s: %s\r\n", textproto.CanonicalMIMEHeaderKey(k), v)
 	}
+
 	b = append(b, '\r', '\n')
+
+	fmt.Printf("[DEBUG] Writing headers (%d bytes):\n%s\n", len(b), string(b))
+
 	_, err := w.writer.Write(b)
 	return err
 }
@@ -67,7 +72,7 @@ func (w *Writer) WriteChunkedBody(p []byte) (int, error) {
 }
 
 func (w *Writer) WriteChunkedBodyDone() (int, error) {
-	return w.writer.Write([]byte("0\r\n\r\n"))
+	return w.writer.Write([]byte("0\r\n"))
 }
 
 func GetDefaultHeaders(contentLength int) headers.Headers {

@@ -1,6 +1,9 @@
 package main
 
 import (
+	"crypto/sha256"
+	"fmt"
+	"go-http-server/internal/headers"
 	"go-http-server/internal/request"
 	"go-http-server/internal/response"
 	"go-http-server/internal/server"
@@ -65,18 +68,28 @@ func proxyHttpBin(w *response.Writer, subPath string) {
 	h := response.GetDefaultHeaders(0)
 	h.Delete("content-length")
 	h.Set("transfer-encoding", "chunked")
-	h.Set("content-type", "text/plain")
+	h.Replace("content-type", "text/plain")
+	h.Set("trailer", "X-Content-SHA256")
+	h.Set("trailer", "X-Content-Length")
 	w.WriteHeaders(h)
 
+	body := []byte{}
 	for {
 		buf := make([]byte, 32)
 		n, err := resp.Body.Read(buf)
 		if err != nil {
 			break
 		}
+		body = append(body, buf[:n]...)
 		w.WriteChunkedBody(buf[:n])
 	}
 	w.WriteChunkedBodyDone()
+
+	trailers := headers.NewHeaders()
+	trailers.Set("X-Content-SHA256", fmt.Sprintf("%x", sha256.Sum256(body)))
+	trailers.Set("X-Content-Length", fmt.Sprintf("%d", len(body)))
+
+	w.WriteHeaders(trailers)
 }
 
 func main() {
