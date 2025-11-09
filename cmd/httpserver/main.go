@@ -92,6 +92,18 @@ func proxyHttpBin(w *response.Writer, subPath string) {
 	w.WriteHeaders(trailers)
 }
 
+func handleVideoReq(w *response.Writer) {
+	f, _ := os.ReadFile("assets/vim.mp4")
+
+	h := response.GetDefaultHeaders(0)
+	h.Replace("content-type", "video/mp4")
+	h.Replace("content-length", fmt.Sprintf("%d", len(f)))
+
+	w.WriteStatusLine(response.StatusOK)
+	w.WriteHeaders(h)
+	w.WriteBody(f)
+}
+
 func main() {
 	handler := func(w *response.Writer, req *request.Request) {
 		if after, ok := strings.CutPrefix(req.RequestLine.RequestTarget, "/httpbin/"); ok {
@@ -104,6 +116,8 @@ func main() {
 			writeHTMLResponse(w, response.StatusBadRequest)
 		case "/myproblem":
 			writeHTMLResponse(w, response.StatusInternalServerError)
+		case "/video":
+			handleVideoReq(w)
 		default:
 			writeHTMLResponse(w, response.StatusOK)
 		}

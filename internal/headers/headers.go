@@ -3,25 +3,9 @@ package headers
 import (
 	"bytes"
 	"errors"
-	"fmt"
 	"go-http-server/internal/tokens"
 	"strings"
-	"unicode"
 )
-
-func sanitize(b []byte) string {
-	// Replace CR/LF with visible markers to make debugging readable
-	s := string(b)
-	s = strings.Map(func(r rune) rune {
-		if unicode.IsControl(r) && r != '\n' && r != '\r' {
-			return '·'
-		}
-		return r
-	}, s)
-	s = strings.ReplaceAll(s, "\r", "\\r")
-	s = strings.ReplaceAll(s, "\n", "\\n")
-	return s
-}
 
 type Headers map[string]string
 
@@ -30,7 +14,6 @@ func NewHeaders() Headers {
 }
 
 func (h Headers) Parse(data []byte) (n int, done bool, err error) {
-	fmt.Printf("[DEBUG] headers.Parse(): len(data)=%d data='%s'\n", len(data), sanitize(data))
 	if len(data) <= 0 {
 		return 0, false, errors.New("headers error: missing end of headers")
 	}
@@ -49,7 +32,6 @@ func (h Headers) Parse(data []byte) (n int, done bool, err error) {
 	}
 
 	if crlfIndex == 0 {
-		fmt.Println("[DEBUG] End of headers found (\\r\\n) — done=true")
 		return len(tokens.CRLF), true, nil
 	}
 
