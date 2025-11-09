@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"go-http-server/internal/headers"
 	"io"
+	"net/textproto"
 	"strconv"
 )
 
@@ -43,7 +44,7 @@ func (w *Writer) WriteStatusLine(statusCode StatusCode) error {
 func (w *Writer) WriteHeaders(headers headers.Headers) error {
 	b := []byte{}
 	for k, v := range headers {
-		b = fmt.Appendf(b, "%s: %s\r\n", k, v)
+		b = fmt.Appendf(b, "%s: %s\r\n", textproto.CanonicalMIMEHeaderKey(k), v)
 	}
 	b = append(b, '\r', '\n')
 	_, err := w.writer.Write(b)
