@@ -1,7 +1,10 @@
 package main
 
 import (
+	"go-http-server/internal/request"
+	"go-http-server/internal/response"
 	"go-http-server/internal/server"
+	"io"
 	"log"
 	"os"
 	"os/signal"
@@ -11,7 +14,26 @@ import (
 const port = 8080
 
 func main() {
-	server, err := server.Serve(port)
+	handler := func(w io.Writer, req *request.Request) *server.HandlerError {
+		if req.RequestLine.RequestTarget == "/yourproblem" {
+			return &server.HandlerError{
+				StatusCode: response.StatusBadRequest,
+				Message:    "Your problem is not my problem\n",
+			}
+		}
+
+		if req.RequestLine.RequestTarget == "/myproblem" {
+			return &server.HandlerError{
+				StatusCode: response.StatusInternalServerError,
+				Message:    "Woopsie, my bad\n",
+			}
+		}
+
+		w.Write([]byte("All good\n"))
+		return nil
+	}
+
+	server, err := server.Serve(port, handler)
 	if err != nil {
 		log.Fatalf("Error starting server: %v", err)
 	}

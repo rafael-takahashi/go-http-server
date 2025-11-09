@@ -3,10 +3,13 @@ package request
 import (
 	"bytes"
 	"errors"
+	"fmt"
 	"go-http-server/internal/headers"
 	"go-http-server/internal/tokens"
 	"io"
 	"strconv"
+	"strings"
+	"unicode"
 )
 
 type RequestLine struct {
@@ -31,67 +34,75 @@ type Request struct {
 	Body         []byte
 }
 
+func sanitize(b []byte) string {
+	// Replace CR/LF with visible markers to make debugging readable
+	s := string(b)
+	s = strings.Map(func(r rune) rune {
+		if unicode.IsControl(r) && r != '\n' && r != '\r' {
+			return '·'
+		}
+		return r
+	}, s)
+	s = strings.ReplaceAll(s, "\r", "\\r")
+	s = strings.ReplaceAll(s, "\n", "\\n")
+	return s
+}
+
 func (r *Request) parse(data []byte) (int, error) {
+	fmt.Printf("[DEBUG] parse(): state=%v, data='%s'\n", r.RequestState, sanitize(data))
+
 	switch r.RequestState {
 	case Initialized:
 		requestLine, numBytes, err := parseRequestLine(data)
+		fmt.Printf("[DEBUG] Initialized → parsed request line, numBytes=%d, err=%v\n", numBytes, err)
 		if err != nil {
 			return 0, err
 		}
 		if numBytes <= 0 {
 			return 0, nil
 		}
-
 		r.RequestLine = requestLine
+		fmt.Printf("[DEBUG] Request line parsed: %+v\n", requestLine)
 		r.RequestState = ParsingHeaders
-
 		return numBytes, nil
+
 	case ParsingHeaders:
 		numBytes, done, err := r.Headers.Parse(data)
+		fmt.Printf("[DEBUG] ParsingHeaders → numBytes=%d done=%v err=%v\n", numBytes, done, err)
 		if err != nil {
 			return 0, err
 		}
-
 		if done {
+			contentLength := r.Headers.Get("content-length")
+			fmt.Printf("[DEBUG] Headers done, Content-Length='%s'\n", contentLength)
 			r.RequestState = ParsingBody
 		}
-
 		return numBytes, nil
-	case ParsingBody:
-		contentLength := r.Headers.Get("content-length")
 
+	case ParsingBody:
+		fmt.Printf("[DEBUG] ParsingBody with %d bytes of data\n", len(data))
+		contentLength := r.Headers.Get("content-length")
 		if contentLength == "" || contentLength == "0" {
 			r.RequestState = Done
 			return len(data), nil
 		}
-
-		if len(data) <= 0 {
-			return 0, errors.New("request error: body is shorter than reported length")
-		}
-
 		r.Body = append(r.Body, data...)
-
 		contentLengthVal, err := strconv.Atoi(contentLength)
-
 		if err != nil {
 			return 0, err
 		}
-
-		currentBodyLength := len(r.Body)
-
-		if currentBodyLength > contentLengthVal {
-			return 0, errors.New("request error: body is greater than reported length")
-		}
-
-		if currentBodyLength == contentLengthVal {
+		fmt.Printf("[DEBUG] Body len=%d / %d\n", len(r.Body), contentLengthVal)
+		if len(r.Body) == contentLengthVal {
 			r.RequestState = Done
-			return len(data), nil
+			fmt.Println("[DEBUG] Body complete — transitioning to Done")
 		}
-
 		return len(data), nil
+
 	case Done:
-		return 0, errors.New("request error: trying to read data in a done state")
+		fmt.Println("[DEBUG] Unexpected parse() call after Done")
+		return 0, nil
 	default:
+		fmt.Println("[DEBUG] Unknown request state!")
 		return 0, errors.New("request error: unknown request state")
 	}
 }
@@ -106,35 +117,44 @@ func RequestFromReader(reader io.Reader) (*Request, error) {
 		Headers:      headers.NewHeaders(),
 	}
 
+	// TODO: change this to parse until no progress can be made. only them read.
 	for req.RequestState != Done {
+		fmt.Printf("\n[DEBUG] Loop start — state=%v readToIndex=%d\n", req.RequestState, readToIndex)
+
 		if readToIndex >= len(buf) {
 			newBuf := make([]byte, len(buf)*2)
 			copy(newBuf, buf)
 			buf = newBuf
+			fmt.Printf("[DEBUG] Buffer expanded to %d bytes\n", len(buf))
 		}
 
 		n, err := reader.Read(buf[readToIndex:])
+		fmt.Printf("[DEBUG] Read %d bytes, err=%v, data='%s'\n", n, err, sanitize(buf[readToIndex:readToIndex+n]))
+
 		if err != nil && !errors.Is(err, io.EOF) {
+			fmt.Printf("[DEBUG] Fatal read error: %v\n", err)
 			return nil, err
 		}
 
 		readToIndex += n
+		fmt.Printf("[DEBUG] Total buffered: %d bytes\n", readToIndex)
 
 		numBytes, err := req.parse(buf[:readToIndex])
+		fmt.Printf("[DEBUG] parse() consumed %d bytes, state=%v, err=%v\n", numBytes, req.RequestState, err)
 
 		if err != nil {
+			fmt.Printf("[DEBUG] parse() returned error: %v\n", err)
 			return nil, err
 		}
 
 		copy(buf, buf[numBytes:readToIndex])
 		readToIndex -= numBytes
+		fmt.Printf("[DEBUG] After shifting buffer: readToIndex=%d\n", readToIndex)
 	}
 
-	if req.RequestState == Done {
-		return req, nil
-	}
+	fmt.Println("[DEBUG] Request parsing complete!")
 
-	return req, errors.New("request error: malformed request")
+	return req, nil
 }
 
 func parseRequestLine(data []byte) (RequestLine, int, error) {
