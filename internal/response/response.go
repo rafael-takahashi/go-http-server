@@ -71,9 +71,9 @@ func (w *Writer) WriteChunkedBodyDone() (int, error) {
 
 func GetDefaultHeaders(contentLength int) headers.Headers {
 	h := headers.NewHeaders()
-	h["Content-Length"] = fmt.Sprintf("%d", contentLength)
-	h["Connection"] = "close"
-	h["Content-Type"] = "text/plain"
+	h.Set("content-length", fmt.Sprintf("%d", contentLength))
+	h.Set("connection", "close")
+	h.Set("Content-type", "text/html")
 
 	return h
 }

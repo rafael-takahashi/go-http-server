@@ -82,6 +82,14 @@ func (h Headers) Get(key string) string {
 	return h[strings.ToLower(key)]
 }
 
+func (h Headers) Set(key string, val string) {
+	h[strings.ToLower(key)] = val
+}
+
+func (h Headers) Delete(key string) {
+	delete(h, strings.ToLower(key))
+}
+
 func isValidFieldName(fieldName []byte) bool {
 	for _, b := range fieldName {
 		switch {

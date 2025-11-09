@@ -5,8 +5,10 @@ import (
 	"go-http-server/internal/response"
 	"go-http-server/internal/server"
 	"log"
+	"net/http"
 	"os"
 	"os/signal"
+	"strings"
 	"syscall"
 )
 
@@ -50,8 +52,40 @@ func writeHTMLResponse(w *response.Writer, status response.StatusCode) {
 	w.WriteBody([]byte(body))
 }
 
+func proxyHttpBin(w *response.Writer, subPath string) {
+	resp, err := http.Get("https://httpbin.org/" + subPath)
+	if err != nil {
+		writeHTMLResponse(w, response.StatusInternalServerError)
+		return
+	}
+	defer resp.Body.Close()
+
+	w.WriteStatusLine(response.StatusCode(resp.StatusCode))
+
+	h := response.GetDefaultHeaders(0)
+	h.Delete("content-length")
+	h.Set("transfer-encoding", "chunked")
+	h.Set("content-type", "text/plain")
+	w.WriteHeaders(h)
+
+	for {
+		buf := make([]byte, 32)
+		n, err := resp.Body.Read(buf)
+		if err != nil {
+			break
+		}
+		w.WriteChunkedBody(buf[:n])
+	}
+	w.WriteChunkedBodyDone()
+}
+
 func main() {
 	handler := func(w *response.Writer, req *request.Request) {
+		if after, ok := strings.CutPrefix(req.RequestLine.RequestTarget, "/httpbin/"); ok {
+			proxyHttpBin(w, after)
+			return
+		}
+
 		switch req.RequestLine.RequestTarget {
 		case "/yourproblem":
 			writeHTMLResponse(w, response.StatusBadRequest)
