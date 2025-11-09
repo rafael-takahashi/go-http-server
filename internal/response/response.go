@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"go-http-server/internal/headers"
 	"io"
+	"strconv"
 )
 
 type StatusCode int
@@ -44,13 +45,28 @@ func (w *Writer) WriteHeaders(headers headers.Headers) error {
 	for k, v := range headers {
 		b = fmt.Appendf(b, "%s: %s\r\n", k, v)
 	}
-	b = fmt.Append(b, "\r\n")
+	b = append(b, '\r', '\n')
 	_, err := w.writer.Write(b)
 	return err
 }
 
 func (w *Writer) WriteBody(p []byte) (int, error) {
 	return w.writer.Write(p)
+}
+
+func (w *Writer) WriteChunkedBody(p []byte) (int, error) {
+	chunkHeader := strconv.FormatInt(int64(len(p)), 16)
+	b := make([]byte, 0, len(chunkHeader)+len(p)+4)
+	b = append(b, chunkHeader...)
+	b = append(b, '\r', '\n')
+	b = append(b, p...)
+	b = append(b, '\r', '\n')
+
+	return w.writer.Write(b)
+}
+
+func (w *Writer) WriteChunkedBodyDone() (int, error) {
+	return w.writer.Write([]byte("0\r\n\r\n"))
 }
 
 func GetDefaultHeaders(contentLength int) headers.Headers {
